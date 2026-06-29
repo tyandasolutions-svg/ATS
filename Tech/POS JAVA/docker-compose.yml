@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+
+  # ─── PostgreSQL Database ───────────────────────────────────────────────────────
+  pos-db:
+    image: postgres:15-alpine
+    container_name: pos-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: posdb
+      POSTGRES_USER: posuser
+      POSTGRES_PASSWORD: pospassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U posuser -d posdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pos-network
+
+  # ─── POS Application ──────────────────────────────────────────────────────────
+  pos-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pos-system
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pos-db:5432/posdb
+      SPRING_DATASOURCE_USERNAME: posuser
+      SPRING_DATASOURCE_PASSWORD: pospassword
+      # IMPORTANT: change this secret in a real production environment!
+      APP_JWT_SECRET: ChangeThisToAVeryLongAndSecureSecretKeyForProductionUse2024!
+      APP_JWT_EXPIRATION: 86400000
+    depends_on:
+      pos-db:
+        condition: service_healthy
+    networks:
+      - pos-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  pos-network:
+    driver: bridge
